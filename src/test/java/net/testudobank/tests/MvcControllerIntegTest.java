@@ -1582,4 +1582,140 @@ public void testTransferPaysOverdraftAndDepositsRemainder() throws SQLException,
     cryptoTransactionTester.test(cryptoTransaction);
   }
 
+  /**
+   * Test that interest is being applied every five transactions.
+   * Ensures the first four transactions don't accrue interest, the fifth one does,
+   * and subseequent transactions do not get interest.
+   */
+  @Test
+  public void testInterestAppliedEveryFiveTransactions() throws ScriptException {
+    
+    double CUSTOMER1_BALANCE = 0;
+    int CUSTOMER1_BALANCE_IN_PENNIES = MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_BALANCE);
+    MvcControllerIntegTestHelpers.addCustomerToDB(dbDelegate, CUSTOMER1_ID, CUSTOMER1_PASSWORD, CUSTOMER1_FIRST_NAME, CUSTOMER1_LAST_NAME, CUSTOMER1_BALANCE_IN_PENNIES, 0);
+
+    double CUSTOMER1_AMOUNT_TO_DEPOSIT = 20; // user input is in dollar amount, not pennies.
+
+    // Make four valid deposits
+    for (int i = 1; i <= 4; i ++){
+        // Prepare Deposit Form to Deposit $10 to customer 1's account.
+        User customer1DepositFormInputs = new User();
+        customer1DepositFormInputs.setUsername(CUSTOMER1_ID);
+        customer1DepositFormInputs.setPassword(CUSTOMER1_PASSWORD);
+        customer1DepositFormInputs.setAmountToDeposit(CUSTOMER1_AMOUNT_TO_DEPOSIT); 
+
+        // send request to the Deposit Form's POST handler in MvcController
+        controller.submitDeposit(customer1DepositFormInputs);
+
+        // fetch updated data from the DB
+        List<Map<String,Object>> customersTableData = jdbcTemplate.queryForList("SELECT * FROM Customers;");
+        List<Map<String,Object>> transactionHistoryTableData = jdbcTemplate.queryForList("SELECT * FROM TransactionHistory;");
+    
+        Map<String,Object> customer1Data = customersTableData.get(0);
+
+        // verify customer balance was increased properly
+        double CUSTOMER1_EXPECTED_FINAL_BALANCE = CUSTOMER1_BALANCE + (CUSTOMER1_AMOUNT_TO_DEPOSIT * i);
+        double CUSTOMER1_EXPECTED_FINAL_BALANCE_IN_PENNIES = MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_EXPECTED_FINAL_BALANCE);
+        assertEquals(CUSTOMER1_EXPECTED_FINAL_BALANCE_IN_PENNIES, (int)customer1Data.get("Balance"));
+
+        // verify that the Deposits are the only log in TransactionHistory table
+        assertEquals(i, transactionHistoryTableData.size());
+    }
+
+    // The fifth deposit should cause the user to gain interest
+    User customer1DepositFormInputs = new User();
+    customer1DepositFormInputs.setUsername(CUSTOMER1_ID);
+    customer1DepositFormInputs.setPassword(CUSTOMER1_PASSWORD);
+    customer1DepositFormInputs.setAmountToDeposit(CUSTOMER1_AMOUNT_TO_DEPOSIT); 
+
+    // send request to the Deposit Form's POST handler in MvcController
+    controller.submitDeposit(customer1DepositFormInputs);
+
+    // fetch updated data from the DB
+    List<Map<String,Object>> customersTableData = jdbcTemplate.queryForList("SELECT * FROM Customers;");
+    List<Map<String,Object>> transactionHistoryTableData = jdbcTemplate.queryForList("SELECT * FROM TransactionHistory;");
+  
+    Map<String,Object> customer1Data = customersTableData.get(0);
+
+    double BALANCE_INTEREST = 1.015;
+
+    // verify customer balance was increased properly
+    double CUSTOMER1_EXPECTED_FINAL_BALANCE = (CUSTOMER1_BALANCE + (CUSTOMER1_AMOUNT_TO_DEPOSIT * 5)) * BALANCE_INTEREST;
+    double CUSTOMER1_EXPECTED_FINAL_BALANCE_IN_PENNIES = MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_EXPECTED_FINAL_BALANCE);
+    assertEquals(CUSTOMER1_EXPECTED_FINAL_BALANCE_IN_PENNIES, (int)customer1Data.get("Balance"));
+
+    // verify that the Deposits and the interest gain are logged in TransactionHistory table
+    assertEquals(6, transactionHistoryTableData.size());
+
+    // The sixth deposit should not cause the user to gain interest
+    customer1DepositFormInputs = new User();
+    customer1DepositFormInputs.setUsername(CUSTOMER1_ID);
+    customer1DepositFormInputs.setPassword(CUSTOMER1_PASSWORD);
+    customer1DepositFormInputs.setAmountToDeposit(CUSTOMER1_AMOUNT_TO_DEPOSIT); 
+
+    // send request to the Deposit Form's POST handler in MvcController
+    controller.submitDeposit(customer1DepositFormInputs);
+
+    // fetch updated data from the DB
+    customersTableData = jdbcTemplate.queryForList("SELECT * FROM Customers;");
+    transactionHistoryTableData = jdbcTemplate.queryForList("SELECT * FROM TransactionHistory;");
+  
+    customer1Data = customersTableData.get(0);
+
+    // verify customer balance was increased properly
+    CUSTOMER1_EXPECTED_FINAL_BALANCE = ((CUSTOMER1_BALANCE + (CUSTOMER1_AMOUNT_TO_DEPOSIT * 5)) * BALANCE_INTEREST) + CUSTOMER1_AMOUNT_TO_DEPOSIT;
+    CUSTOMER1_EXPECTED_FINAL_BALANCE_IN_PENNIES = MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_EXPECTED_FINAL_BALANCE);
+    assertEquals(CUSTOMER1_EXPECTED_FINAL_BALANCE_IN_PENNIES, (int)customer1Data.get("Balance"));
+
+    // verify that the Deposits are logged in TransactionHistory table
+    assertEquals(7, transactionHistoryTableData.size());
+  }
+
+
+  /**
+   * Test that CustomerNumberOfDepositsForInterest is only being incremented
+   * for deposits that pass the 20 dollar threshold.
+   */
+  @Test
+  public void testCustomerNumberOfDepositsForInterestIncrementedOnlyForDepositsAboveThreshold() throws ScriptException {
+    
+    double CUSTOMER1_BALANCE = 0;
+    int CUSTOMER1_BALANCE_IN_PENNIES = MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_BALANCE);
+    MvcControllerIntegTestHelpers.addCustomerToDB(dbDelegate, CUSTOMER1_ID, CUSTOMER1_PASSWORD, CUSTOMER1_FIRST_NAME, CUSTOMER1_LAST_NAME, CUSTOMER1_BALANCE_IN_PENNIES, 0);
+
+    // Depositing 20 should increment the counter
+    User customer1DepositFormInputs = new User();
+    customer1DepositFormInputs.setUsername(CUSTOMER1_ID);
+    customer1DepositFormInputs.setPassword(CUSTOMER1_PASSWORD);
+    customer1DepositFormInputs.setAmountToDeposit(20); 
+    controller.submitDeposit(customer1DepositFormInputs);
+
+    List<Map<String,Object>> customersTableData = jdbcTemplate.queryForList("SELECT * FROM Customers;");
+    Map<String,Object> customer1Data = customersTableData.get(0);
+    assertEquals(1, (int)customer1Data.get("NumDepositsForInterest"));
+
+    // Depositing 19.99 should not increment the counter
+    customer1DepositFormInputs = new User();
+    customer1DepositFormInputs.setUsername(CUSTOMER1_ID);
+    customer1DepositFormInputs.setPassword(CUSTOMER1_PASSWORD);
+    customer1DepositFormInputs.setAmountToDeposit(19.99); 
+    controller.submitDeposit(customer1DepositFormInputs);
+
+    customersTableData = jdbcTemplate.queryForList("SELECT * FROM Customers;");
+    customer1Data = customersTableData.get(0);
+    assertEquals(1, (int)customer1Data.get("NumDepositsForInterest"));
+
+    // Depositing 20.01 should increment the counter
+    customer1DepositFormInputs = new User();
+    customer1DepositFormInputs.setUsername(CUSTOMER1_ID);
+    customer1DepositFormInputs.setPassword(CUSTOMER1_PASSWORD);
+    customer1DepositFormInputs.setAmountToDeposit(20.01); 
+    controller.submitDeposit(customer1DepositFormInputs);
+
+    customersTableData = jdbcTemplate.queryForList("SELECT * FROM Customers;");
+    customer1Data = customersTableData.get(0);
+    assertEquals(2, (int)customer1Data.get("NumDepositsForInterest"));
+
+  }
+
 }
