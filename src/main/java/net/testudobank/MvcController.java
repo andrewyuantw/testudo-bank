@@ -42,6 +42,7 @@ public class MvcController {
   private final static int MAX_REVERSABLE_TRANSACTIONS_AGO = 3;
   private final static String HTML_LINE_BREAK = "<br/>";
   public static String TRANSACTION_HISTORY_DEPOSIT_ACTION = "Deposit";
+  public static String TRANSACTION_HISTORY_INTEREST_RECEIVED_ACTION = "InterestReceived";
   public static String TRANSACTION_HISTORY_WITHDRAW_ACTION = "Withdraw";
   public static String TRANSACTION_HISTORY_TRANSFER_SEND_ACTION = "TransferSend";
   public static String TRANSACTION_HISTORY_TRANSFER_RECEIVE_ACTION = "TransferReceive";
@@ -357,8 +358,18 @@ public class MvcController {
       TestudoBankRepository.insertRowToTransactionHistoryTable(jdbcTemplate, userID, currentTime, TRANSACTION_HISTORY_DEPOSIT_ACTION, userDepositAmtInPennies);
     }
 
+    // only increments the number of deposits (for interest purposes) if the 
+    // deposit is over or equal to 20 dollars
+
+    if (userDepositAmt >= 20){
+        TestudoBankRepository.setCustomerNumberOfDepositsForInterest(jdbcTemplate, userID, TestudoBankRepository.getCustomerNumberOfDepositsForInterest(jdbcTemplate, userID) + 1);
+
+        // only apply interest after each deposit
+        applyInterest(user);
+    }
+
     // update Model so that View can access new main balance, overdraft balance, and logs
-    applyInterest(user);
+    
     updateAccountInfo(user);
     return "account_info";
   }
@@ -805,6 +816,21 @@ public class MvcController {
    * @return "account_info" if interest applied. Otherwise, redirect to "welcome" page.
    */
   public String applyInterest(@ModelAttribute("user") User user) {
+
+    String userID = user.getUsername();
+    String currentTime = SQL_DATETIME_FORMATTER.format(new java.util.Date());
+
+    // if customer has overdraft balance, they are not eligible for interest
+    if (TestudoBankRepository.getCustomerOverdraftBalanceInPennies(jdbcTemplate, userID) > 0){
+        return "welcome";
+    }
+
+    if (TestudoBankRepository.getCustomerNumberOfDepositsForInterest(jdbcTemplate, userID) % 5 == 0){
+        int CustomerBalance = TestudoBankRepository.getCustomerCashBalanceInPennies(jdbcTemplate, userID);
+        int GainedInterest = (int)(CustomerBalance * (BALANCE_INTEREST_RATE - 1));
+        TestudoBankRepository.increaseCustomerCashBalance(jdbcTemplate, userID, GainedInterest);
+        TestudoBankRepository.insertRowToTransactionHistoryTable(jdbcTemplate, userID, currentTime, TRANSACTION_HISTORY_INTEREST_RECEIVED_ACTION, GainedInterest);
+    }
 
     return "welcome";
 
