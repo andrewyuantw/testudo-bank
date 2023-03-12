@@ -1582,6 +1582,13 @@ public void testTransferPaysOverdraftAndDepositsRemainder() throws SQLException,
     cryptoTransactionTester.test(cryptoTransaction);
   }
 
+
+  public Map<String,Object> getCustomerDataMap(){
+    List<Map<String,Object>> customersTableData = jdbcTemplate.queryForList("SELECT * FROM Customers;");
+    Map<String,Object> customerDataMap = customersTableData.get(0);
+    return customerDataMap;
+  }
+
   /**
    * Test that interest is being applied every five transactions.
    * Ensures the first four transactions don't accrue interest, the fifth one does,
@@ -1597,7 +1604,7 @@ public void testTransferPaysOverdraftAndDepositsRemainder() throws SQLException,
     double CUSTOMER1_AMOUNT_TO_DEPOSIT = 20; // user input is in dollar amount, not pennies.
 
     // Make four valid deposits
-    for (int i = 1; i <= 4; i ++){
+    for (int numValidDeposits = 1; numValidDeposits <= 4; numValidDeposits ++){
         // Prepare Deposit Form to Deposit $10 to customer 1's account.
         User customer1DepositFormInputs = new User();
         customer1DepositFormInputs.setUsername(CUSTOMER1_ID);
@@ -1608,18 +1615,17 @@ public void testTransferPaysOverdraftAndDepositsRemainder() throws SQLException,
         controller.submitDeposit(customer1DepositFormInputs);
 
         // fetch updated data from the DB
-        List<Map<String,Object>> customersTableData = jdbcTemplate.queryForList("SELECT * FROM Customers;");
         List<Map<String,Object>> transactionHistoryTableData = jdbcTemplate.queryForList("SELECT * FROM TransactionHistory;");
     
-        Map<String,Object> customer1Data = customersTableData.get(0);
+        Map<String,Object> customerDataMap = getCustomerDataMap();
 
         // verify customer balance was increased properly
-        double CUSTOMER1_EXPECTED_FINAL_BALANCE = CUSTOMER1_BALANCE + (CUSTOMER1_AMOUNT_TO_DEPOSIT * i);
+        double CUSTOMER1_EXPECTED_FINAL_BALANCE = CUSTOMER1_BALANCE + (CUSTOMER1_AMOUNT_TO_DEPOSIT * numValidDeposits);
         double CUSTOMER1_EXPECTED_FINAL_BALANCE_IN_PENNIES = MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_EXPECTED_FINAL_BALANCE);
-        assertEquals(CUSTOMER1_EXPECTED_FINAL_BALANCE_IN_PENNIES, (int)customer1Data.get("Balance"));
+        assertEquals(CUSTOMER1_EXPECTED_FINAL_BALANCE_IN_PENNIES, (int)customerDataMap.get("Balance"));
 
         // verify that the Deposits are the only log in TransactionHistory table
-        assertEquals(i, transactionHistoryTableData.size());
+        assertEquals(numValidDeposits, transactionHistoryTableData.size());
     }
 
     // The fifth deposit should cause the user to gain interest
@@ -1632,17 +1638,16 @@ public void testTransferPaysOverdraftAndDepositsRemainder() throws SQLException,
     controller.submitDeposit(customer1DepositFormInputs);
 
     // fetch updated data from the DB
-    List<Map<String,Object>> customersTableData = jdbcTemplate.queryForList("SELECT * FROM Customers;");
     List<Map<String,Object>> transactionHistoryTableData = jdbcTemplate.queryForList("SELECT * FROM TransactionHistory;");
   
-    Map<String,Object> customer1Data = customersTableData.get(0);
+    Map<String,Object> customerDataMap = getCustomerDataMap();
 
     double BALANCE_INTEREST = 1.015;
 
     // verify customer balance was increased properly
     double CUSTOMER1_EXPECTED_FINAL_BALANCE = (CUSTOMER1_BALANCE + (CUSTOMER1_AMOUNT_TO_DEPOSIT * 5)) * BALANCE_INTEREST;
     double CUSTOMER1_EXPECTED_FINAL_BALANCE_IN_PENNIES = MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_EXPECTED_FINAL_BALANCE);
-    assertEquals(CUSTOMER1_EXPECTED_FINAL_BALANCE_IN_PENNIES, (int)customer1Data.get("Balance"));
+    assertEquals(CUSTOMER1_EXPECTED_FINAL_BALANCE_IN_PENNIES, (int)customerDataMap.get("Balance"));
 
     // verify that the Deposits and the interest gain are logged in TransactionHistory table
     assertEquals(6, transactionHistoryTableData.size());
@@ -1657,15 +1662,15 @@ public void testTransferPaysOverdraftAndDepositsRemainder() throws SQLException,
     controller.submitDeposit(customer1DepositFormInputs);
 
     // fetch updated data from the DB
-    customersTableData = jdbcTemplate.queryForList("SELECT * FROM Customers;");
+    
     transactionHistoryTableData = jdbcTemplate.queryForList("SELECT * FROM TransactionHistory;");
   
-    customer1Data = customersTableData.get(0);
+    customerDataMap = getCustomerDataMap();
 
     // verify customer balance was increased properly
     CUSTOMER1_EXPECTED_FINAL_BALANCE = ((CUSTOMER1_BALANCE + (CUSTOMER1_AMOUNT_TO_DEPOSIT * 5)) * BALANCE_INTEREST) + CUSTOMER1_AMOUNT_TO_DEPOSIT;
     CUSTOMER1_EXPECTED_FINAL_BALANCE_IN_PENNIES = MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_EXPECTED_FINAL_BALANCE);
-    assertEquals(CUSTOMER1_EXPECTED_FINAL_BALANCE_IN_PENNIES, (int)customer1Data.get("Balance"));
+    assertEquals(CUSTOMER1_EXPECTED_FINAL_BALANCE_IN_PENNIES, (int)customerDataMap.get("Balance"));
 
     // verify that the Deposits are logged in TransactionHistory table
     assertEquals(7, transactionHistoryTableData.size());
