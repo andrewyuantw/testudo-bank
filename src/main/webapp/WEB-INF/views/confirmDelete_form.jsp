@@ -47,7 +47,7 @@
         <br/>
         <br/>
         
-        <form:form action="login" method="post" modelAttribute="user">
+        <form:form action="delete" method="post" modelAttribute="user">
 			<form:label path="username">Username:</form:label>
 			<form:input path="username"/><br/>
 			
