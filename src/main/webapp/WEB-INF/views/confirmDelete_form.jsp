@@ -35,11 +35,30 @@
 </head>
 <body>
 	<div align="center">
-		<h2>Deletion Confirmation</h2>
+		<h2>Account Deletion Confirmation</h2>
         <img src="https://fanapeel.com/wp-content/uploads/logo_-university-of-maryland-terrapins-testudo-turtle-hold-red-white-m.png" style="float:left;width:100px;height:100px;">
-        <h3>Your account will be deleted and all corresponding data will be cleared. Please note that this action is irreversible. Are you sure you want to proceed?</h3>
+        <h3>Your account will be deleted and all corresponding data will be cleared. Please note that this action is irreversible. </h3>
+        <h3>Are you sure you want to proceed? If you would like to cancel, please select the "Go Back" link below.</h3>
+        
 
-    <a href='/'>Home</a>
+        <a href='/login'>Go Back</a>
+
+        <br/>
+        <br/>
+        <br/>
+        
+        <form:form action="login" method="post" modelAttribute="user">
+			<form:label path="username">Username:</form:label>
+			<form:input path="username"/><br/>
+			
+			<form:label path="password">Password:</form:label>
+			<form:password path="password"/><br/>		
+				
+			<form:button>Confirm Delete</form:button>
+		</form:form>
+
+        
+    
 	</div>
 </body>
 </html>

@@ -94,7 +94,9 @@ public class MvcController {
    */
   @GetMapping("/confirmDelete")
   public String showConfirmDelete(Model model) {
-      return "confirmDelete_form";
+        User user = new User();
+        model.addAttribute("user", user);
+        return "confirmDelete_form";
   }
 
   /**
