@@ -86,6 +86,17 @@ public class MvcController {
 		return "login_form";
 	}
 
+    /**
+   * HTML GET request handler that serves the "delete confirmation" page to the user.
+   * 
+   * @param model
+   * @return "confirmDelete_form" page
+   */
+  @GetMapping("/confirmDelete")
+  public String showConfirmDelete(Model model) {
+      return "confirmDelete_form";
+  }
+
   /**
    * HTML GET request handler that serves the "deposit_form" page to the user.
    * An empty `User` object is also added to the Model as an Attribute to store
