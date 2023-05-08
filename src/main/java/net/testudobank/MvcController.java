@@ -86,6 +86,19 @@ public class MvcController {
 		return "login_form";
 	}
 
+    /**
+   * HTML GET request handler that serves the "delete confirmation" page to the user.
+   * 
+   * @param model
+   * @return "confirmDelete_form" page
+   */
+  @GetMapping("/confirmDelete")
+  public String showConfirmDelete(Model model) {
+        User user = new User();
+        model.addAttribute("user", user);
+        return "confirmDelete_form";
+  }
+
   /**
    * HTML GET request handler that serves the "deposit_form" page to the user.
    * An empty `User` object is also added to the Model as an Attribute to store
@@ -288,6 +301,73 @@ public class MvcController {
       return "welcome";
     }
 	}
+
+    /**
+   * HTML POST request handler that uses user input from Confirm Delete Form page to determine 
+   * user authenticity, and then handles subsequent user deletion. 
+   * 
+   * Queries 'passwords' table in MySQL DB for the correct password associated with the
+   * username ID given by the user. Compares the user's password attempt with the correct
+   * password.
+   * 
+   * If the password attempt is correct, we query the MySQL DB to see if the user 
+   * has any existing balance, overdraftBalance, or cryptoBalance. If any of the three
+   * values are nonzero, then the deletion will not go through. The user will be served
+   * the 'DeleteError' page instead.
+   * 
+   * If all three values are zero, then the customer's info is deleted from both
+   * the Customers and Passwords tables. Afterwards, the user will be served the 
+   * 'DeleteSuccess' page.
+   * 
+   * If the password attempt is incorrect, the user is redirected to the "welcome" page.
+   * 
+   * @param user
+   * @return "DeleteSuccess" page if delete successful, and "DeleteError" otherwise.
+   *  If the user fails to authenticate, redirect to "welcome" page.
+   */
+  @PostMapping("/delete")
+  public String submitConfirmDeleteForm(@ModelAttribute("user") User user) {
+        // Print user's existing fields for debugging
+        System.out.println(user);
+
+        String userID = user.getUsername();
+        String userPasswordAttempt = user.getPassword();
+
+        // Retrieve correct password for this customer.
+        String userPassword = TestudoBankRepository.getCustomerPassword(jdbcTemplate, userID);
+
+        if (userPasswordAttempt.equals(userPassword)) {
+
+            // Query for the user's balance and overdraftBalance
+            String getUserNameAndBalanceAndOverDraftBalanceSql = String.format("SELECT Balance, OverdraftBalance FROM Customers WHERE CustomerID='%s';", user.getUsername());
+            List<Map<String,Object>> queryResults = jdbcTemplate.queryForList(getUserNameAndBalanceAndOverDraftBalanceSql);
+            Map<String,Object> userData = queryResults.get(0);
+
+            double userBalance = ((int)userData.get("Balance")/100.0);
+            double userOverDraftBalance = ((int)userData.get("OverdraftBalance")/100.0);
+
+            // Query for the user's cryptobalance
+            double cryptoBalanceInDollars = 0;
+            for (String cryptoName : MvcController.SUPPORTED_CRYPTOCURRENCIES) {
+                cryptoBalanceInDollars += TestudoBankRepository.getCustomerCryptoBalance(jdbcTemplate, user.getUsername(), cryptoName).orElse(0.0) * cryptoPriceClient.getCurrentCryptoValue(cryptoName);
+            }
+
+            // If any of the balances are not zero, the deletion will result in an error
+            if (userBalance != 0 || userOverDraftBalance != 0 || cryptoBalanceInDollars != 0){
+                return "DeleteError";
+            }
+
+            String accountDeletionCustomersSQLCommand = String.format("DELETE FROM Customers WHERE CustomerID='%s';", user.getUsername());
+            jdbcTemplate.execute(accountDeletionCustomersSQLCommand);
+            String accountDeletionPasswordSQLCommand = String.format("DELETE FROM Passwords WHERE CustomerID='%s';", user.getUsername());
+            jdbcTemplate.execute(accountDeletionPasswordSQLCommand);
+
+            return "DeleteSuccess";
+
+        } else {
+            return "welcome";
+        }
+    }
 
   /**
    * HTML POST request handler for the Deposit Form page.
