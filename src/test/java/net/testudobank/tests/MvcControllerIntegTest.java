@@ -81,6 +81,183 @@ public class MvcControllerIntegTest {
   //// INTEGRATION TESTS ////
 
   /**
+   * Verifies the simplest account deletion case.
+   * The customer's Balance in the Customers table is zero, and the account should be deleted.
+   * 
+   * Assumes that the customer's account is in the simplest state
+   * (not in overdraft, account is not frozen due to too many transaction disputes, etc.)
+   * 
+   * @throws SQLException
+   * @throws ScriptException
+   */
+  @Test
+  public void testSimpleDelete() throws SQLException, ScriptException {
+    
+    double CUSTOMER1_BALANCE = 0.0;
+    int CUSTOMER1_BALANCE_IN_PENNIES = MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_BALANCE);
+    MvcControllerIntegTestHelpers.addCustomerToDB(dbDelegate, CUSTOMER1_ID, CUSTOMER1_PASSWORD, CUSTOMER1_FIRST_NAME, CUSTOMER1_LAST_NAME, CUSTOMER1_BALANCE_IN_PENNIES, 0);
+
+    // Retrieves customer1's data from the MySQL database and verifies that
+    // customer 1 is the only data populated in Customers table
+    List<Map<String,Object>> customersTableData = jdbcTemplate.queryForList("SELECT * FROM Customers;");
+    assertEquals(1, customersTableData.size());
+
+    // Prepare Confirm Delete Form to delete customer 1's account.
+    User customer1DeleteFormInputs = new User();
+    customer1DeleteFormInputs.setUsername(CUSTOMER1_ID);
+    customer1DeleteFormInputs.setPassword(CUSTOMER1_PASSWORD);
+
+    // send request to the Deposit Form's POST handler in MvcController
+    controller.submitConfirmDeleteForm(customer1DeleteFormInputs);
+
+    // fetch updated data from the DB
+    customersTableData = jdbcTemplate.queryForList("SELECT * FROM Customers;");
+    
+    // verify that customer1's data has been successfully deleted
+    assertEquals(0, customersTableData.size());
+  }
+
+  /**
+   * Verifies the cases where a customer with a non-zero balance attempts to delete their 
+   * account. The account deletion should not go through, and the customer should 
+   * not be removed from the database.
+   * 
+   * @throws SQLException
+   * @throws ScriptException
+   */
+  @Test
+  public void testUnsuccessfulDeleteBalance() throws SQLException, ScriptException {
+    
+    // Initialize customer 1 with a non-zero balance
+    double CUSTOMER1_BALANCE = 10.0;
+    int CUSTOMER1_BALANCE_IN_PENNIES = MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_BALANCE);
+    MvcControllerIntegTestHelpers.addCustomerToDB(dbDelegate, CUSTOMER1_ID, CUSTOMER1_PASSWORD, CUSTOMER1_FIRST_NAME, CUSTOMER1_LAST_NAME, CUSTOMER1_BALANCE_IN_PENNIES, 0);
+
+    // Retrieves customer1's data from the MySQL database and verifies that
+    // customer 1 is the only data populated in Customers table
+    List<Map<String,Object>> customersTableData = jdbcTemplate.queryForList("SELECT * FROM Customers;");
+    assertEquals(1, customersTableData.size());
+
+    // Prepare Confirm Delete Form to delete customer 1's account.
+    User customer1DeleteFormInputs = new User();
+    customer1DeleteFormInputs.setUsername(CUSTOMER1_ID);
+    customer1DeleteFormInputs.setPassword(CUSTOMER1_PASSWORD);
+
+    // send request to the Deposit Form's POST handler in MvcController
+    controller.submitConfirmDeleteForm(customer1DeleteFormInputs);
+
+    // fetch updated data from the DB
+    customersTableData = jdbcTemplate.queryForList("SELECT * FROM Customers;");
+    
+    // verify that customer1's data has not been deleted
+    assertEquals(1, customersTableData.size());
+
+  }
+
+    /**
+   * Verifies the cases where a customer with a non-zero overdraft balance attempts to delete their 
+   * account. The account deletion should not go through, and the customer should 
+   * not be removed from the database.
+   * 
+   * @throws SQLException
+   * @throws ScriptException
+   */
+  @Test
+  public void testUnsuccessfulDeleteOverdraftBalance() throws SQLException, ScriptException {
+    
+    // Initialize customer 1 with a non-zero overdraft balance
+    int CUSTOMER1_OVERDRAFT_BALANCE_IN_PENNIES = 100;
+    int CUSTOMER1_NUM_FRAUD_REVERSALS = 0;
+    double CUSTOMER1_MAIN_BALANCE = 0;
+    int CUSTOMER1_MAIN_BALANCE_IN_PENNIES = MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_MAIN_BALANCE);
+    int CUSTOMER1_NUM_INTEREST_DEPOSITS = 0;
+
+    MvcControllerIntegTestHelpers.addCustomerToDB(dbDelegate, 
+                                                  CUSTOMER1_ID, 
+                                                  CUSTOMER1_PASSWORD, 
+                                                  CUSTOMER1_FIRST_NAME, 
+                                                  CUSTOMER1_LAST_NAME, 
+                                                  CUSTOMER1_MAIN_BALANCE_IN_PENNIES, 
+                                                  CUSTOMER1_OVERDRAFT_BALANCE_IN_PENNIES,
+                                                  CUSTOMER1_NUM_FRAUD_REVERSALS,
+                                                  CUSTOMER1_NUM_INTEREST_DEPOSITS);
+
+    // Retrieves customer1's data from the MySQL database and verifies that
+    // customer 1 is the only data populated in Customers table
+    List<Map<String,Object>> customersTableData = jdbcTemplate.queryForList("SELECT * FROM Customers;");
+    assertEquals(1, customersTableData.size());
+
+    // Prepare Confirm Delete Form to delete customer 1's account.
+    User customer1DeleteFormInputs = new User();
+    customer1DeleteFormInputs.setUsername(CUSTOMER1_ID);
+    customer1DeleteFormInputs.setPassword(CUSTOMER1_PASSWORD);
+
+    // send request to the Deposit Form's POST handler in MvcController
+    controller.submitConfirmDeleteForm(customer1DeleteFormInputs);
+
+    // fetch updated data from the DB
+    customersTableData = jdbcTemplate.queryForList("SELECT * FROM Customers;");
+    
+    // verify that customer1's data has not been deleted
+    assertEquals(1, customersTableData.size());
+
+  }
+
+    /**
+   * Verifies the cases where a customer with a non-zero crypto balance attempts to delete their 
+   * account. The account deletion should not go through, and the customer should 
+   * not be removed from the database.
+   * 
+   * @throws SQLException
+   * @throws ScriptException
+   */
+  @Test
+  public void testUnsuccessfulDeleteCrypto() throws SQLException, ScriptException {
+    
+    // Initialize customer 1 with a non-zero overdraft balance
+    int CUSTOMER1_OVERDRAFT_BALANCE_IN_PENNIES = 0;
+    int CUSTOMER1_NUM_FRAUD_REVERSALS = 0;
+    double CUSTOMER1_MAIN_BALANCE = 0;
+    int CUSTOMER1_MAIN_BALANCE_IN_PENNIES = MvcControllerIntegTestHelpers.convertDollarsToPennies(CUSTOMER1_MAIN_BALANCE);
+    int CUSTOMER1_NUM_INTEREST_DEPOSITS = 0;
+    
+    MvcControllerIntegTestHelpers.addCustomerToDB(dbDelegate, 
+                                                  CUSTOMER1_ID, 
+                                                  CUSTOMER1_PASSWORD, 
+                                                  CUSTOMER1_FIRST_NAME, 
+                                                  CUSTOMER1_LAST_NAME, 
+                                                  CUSTOMER1_MAIN_BALANCE_IN_PENNIES, 
+                                                  CUSTOMER1_OVERDRAFT_BALANCE_IN_PENNIES,
+                                                  CUSTOMER1_NUM_FRAUD_REVERSALS,
+                                                  CUSTOMER1_NUM_INTEREST_DEPOSITS);
+
+                                        
+    // Mock the crypto return value, and set the customer's crypto balance to non-zero
+    Mockito.when(cryptoPriceClient.getCurrentCryptoValue("ETH")).thenReturn(10.0);
+    MvcControllerIntegTestHelpers.setCryptoBalance(dbDelegate, CUSTOMER1_ID, "ETH", 10);
+
+    // Retrieves customer1's data from the MySQL database and verifies that
+    // customer 1 is the only data populated in Customers table
+    List<Map<String,Object>> customersTableData = jdbcTemplate.queryForList("SELECT * FROM Customers;");
+    assertEquals(1, customersTableData.size());
+
+    // Prepare Confirm Delete Form to delete customer 1's account.
+    User customer1DeleteFormInputs = new User();
+    customer1DeleteFormInputs.setUsername(CUSTOMER1_ID);
+    customer1DeleteFormInputs.setPassword(CUSTOMER1_PASSWORD);
+
+    // send request to the Deposit Form's POST handler in MvcController
+    controller.submitConfirmDeleteForm(customer1DeleteFormInputs);
+
+    // fetch updated data from the DB
+    customersTableData = jdbcTemplate.queryForList("SELECT * FROM Customers;");
+    
+    // verify that customer1's data has not been deleted
+    assertEquals(1, customersTableData.size());
+
+  }
+
+  /**
    * Verifies the simplest deposit case.
    * The customer's Balance in the Customers table should be increased,
    * and the Deposit should be logged in the TransactionHistory table.
